@@ -1,0 +1,114 @@
+### Practical Machine Learning - Prediction Assignment
+### Prediction Assignment Writeup - Weight Lifting Exercise
+### By: Girish Karkhanis
+
+========================================================
+
+```{r echo=FALSE}
+options(warn=-1)
+```
+
+## Synopsis
+This Write-up aims to conform to the assignment requirements of predicting participant performance based on past activity dataset provided. Personal wearable devices make it possible for large quantities of data collection inexpensively on personal activities. The data can collect not only the quantity bit also the quality of activity performed. The data used is from six participants outfitted with accelerometers on the belt, forearm, arm, and barbells. The participants lifted the barbells correctly and incorrectly in five different ways, (A, B, C, D & E). Machine Learning algorithms in R are used to predict the class of WLE dataset. Data Cleaning is performed to remove unwanted variables and select the most reliable dataset. Sample errors are determined through cross-validation. Testing data accuracy is verified by checking through model fit.
+
+## Data Processing and Cleaning
+
+In this section raw data is obtained from the source csv files, summarized, transformed and cleaned to prepare for the prediction models. Results and conclusions are based on the analysis of the said models.
+
+Data is processed in the following steps: (1) Data Cleaning to remove NA values, (2) Narrow down variables removing those that appear to be related to personal characteristics rather than sensory readings, such as "X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", and "num_window". 
+
+```{r cache = TRUE}
+## Setting the working directory. 
+setwd("C:\\Users\\hp\\PracMachLearning")
+## Reading the Raw Data and making blank values NA
+trainingDataRaw <- read.csv("pml-training.csv",header=TRUE,na.strings=c("NA",""))
+testingDataRaw <- read.csv("pml-testing.csv",header=TRUE,na.strings=c("NA",""))
+## Removing columns with at least one NA value
+cleanTrainingData<-trainingDataRaw[ , colSums(is.na(trainingDataRaw)) == 0]
+finalTrainingData<-cleanTrainingData[,8:60]
+cleanTestingData<-testingDataRaw[ , colSums(is.na(testingDataRaw)) == 0]
+finalTestingData<-cleanTestingData[,8:60]
+```
+
+### Summarizing Data
+Size and structure of the refined and summarized dataset is available here: 
+
+```{r cache =TRUE}
+## Finding Number of Variables and Observations
+dim(finalTrainingData)
+```
+
+### Creating Training and Cross Validation Sets
+
+Based on "classe" variable two subsets are created: Training and Cross-Validation. The Training data set will be used to create the model fit, and the Cross-Validation data set which will be used to calculate Out Of Sample Error.
+
+```{r cache=TRUE}
+library(caret)
+inBuild <- createDataPartition(y=finalTrainingData$classe,
+                               p=0.7, list=FALSE)
+validation <-finalTrainingData[-inBuild,]
+training <- finalTrainingData[inBuild,]
+dim(training)
+dim(validation)
+```
+
+## Model Building
+
+Two different algorithms are applied to determine which provides better accuracy, Random Forest Model or the Boosting Method Model. Findings from these two models for accuracy will be used for Out of Sample error calculation and are described in the Results section.
+
+```{r cache=TRUE}
+## Creating RF model, predicting and calculating Confusion Matrix on Cross Validaton Set
+set.seed(6677)
+modFitRF <- train(classe ~ .,method="rf",data=training, trControl = trainControl(method = "cv", number = 4))
+modFitRF
+validateRF<-predict(modFitRF,newdata=validation)
+crf<-confusionMatrix(validateRF, validation$classe)
+
+## Creating GBM model, predicting and calculating Confusion Matrix on Cross Validaton Set
+set.seed(6688)
+modFitGBM <- train(classe ~ .,method="gbm",data=training, trControl = trainControl(method = "cv", number = 4), verbose=FALSE)
+modFitGBM
+validateGBM<-predict(modFitGBM,newdata=validation)
+cgbm<-confusionMatrix(validateGBM, validation$classe)
+```
+
+## Results
+
+Random Forest gives an accuracy of 99.24% whereas Boosting gives 96.38%. Accuracy for the two models on Cross Validation set is shown below where the accuracy for the Random Forest model is a better fit for the given data. 
+
+```{r}
+## Random Forest Accuracy on Cross Validation Set
+crf$overall[1]
+## Boosting Model Accuracy 
+cgbm$overall[1]
+```
+
+The out of sample error for Cross Validation Set is as below. The Out of Sample error is less than 1% buttressing a very good fit.
+
+```{r}
+(1 - ( sum( validateRF == validation$classe) / length(validateRF)))*100
+```
+
+## Test Set Prediction
+Prediction on the Test Set based on the Random Forest output is generated and saved for submission as 20 text files.
+
+```{r }
+testRF<-predict(modFitRF, newdata=finalTestingData)
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(testRF)
+```
+
+## Conclusion
+
+(1) The Random Forest model is the best predictor in the Weight Lifting exercise. 
+(2) The Random Forest model also works well on cross-validation set giving high accuracy and small out of sample error. 
+(3) The Random Forest model predictions were applied to the Test Dataset. 
+
+## Comments
+The Random Forest model output shows two variables that are strong predictors showing accuracy of 98.92% and SD of less than 0.098%. It might be worthwhile to investigate these variables further. 
